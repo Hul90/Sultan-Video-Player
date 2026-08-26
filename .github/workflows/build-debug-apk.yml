@@ -1,0 +1,59 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK platform & build-tools
+        run: |
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - name: Generate debug keystore
+        # build.gradle.kts's "debugConfig" signing config expects a debug.keystore
+        # at the project root with the classic Android debug credentials.
+        # It's gitignored on purpose (never commit a real keystore), so CI
+        # generates a fresh one matching those exact credentials every run.
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Generate Gradle wrapper
+        run: |
+          curl -L -o gradle-dist.zip https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+          unzip -q gradle-dist.zip
+          ./gradle-9.3.1/bin/gradle wrapper --gradle-version 9.3.1
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sultan-video-player-debug-apk
+          path: app/build/outputs/apk/debug/*.apk

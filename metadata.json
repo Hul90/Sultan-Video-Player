@@ -1,0 +1,7 @@
+{
+  "name": "Sultan video player",
+  "description": "A feature-rich, high-performance Android video player with gesture controls, 4K support, PiP mode, multi-track audio & subtitles, and folder manager.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
