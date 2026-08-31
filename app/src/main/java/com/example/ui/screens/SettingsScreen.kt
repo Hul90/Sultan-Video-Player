@@ -71,6 +71,7 @@ fun SettingsScreen(
     onSelectPalette: (AppThemePalette) -> Unit = {},
     onOpenVault: () -> Unit = {},
     onOpenStream: () -> Unit = {},
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -122,7 +123,7 @@ fun SettingsScreen(
 
                     Column {
                         Text(
-                            text = "Sultan video player",
+                            text = "Video Player",
                             color = TextPrimary,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
@@ -305,7 +306,7 @@ fun SettingsScreen(
                         .clickable {
                             val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
                                 data = Uri.parse("mailto:sultanmahamud5497@gmail.com")
-                                putExtra(Intent.EXTRA_SUBJECT, "Inquiry: Sultan Video Player")
+                                putExtra(Intent.EXTRA_SUBJECT, "Inquiry: Video Player")
                             }
                             context.startActivity(Intent.createChooser(emailIntent, "Send Email to Developer"))
                         }

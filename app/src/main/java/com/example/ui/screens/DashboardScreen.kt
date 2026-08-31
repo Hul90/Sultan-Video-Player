@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,9 +48,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
@@ -55,6 +57,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.VideoItem
 import com.example.data.model.VideoSortBy
+import com.example.ui.components.RenameVideoDialog
 import com.example.ui.components.VideoDetailsDialog
 import com.example.ui.theme.HighDensityAccent
 import com.example.ui.theme.HighDensityBg
@@ -99,6 +104,57 @@ fun DashboardScreen(
     val favoritesList by viewModel.favoritesList.collectAsStateWithLifecycle()
     val vaultVideos by viewModel.vaultVideos.collectAsStateWithLifecycle()
     val streamHistory by viewModel.streamHistory.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val deletePendingIntent by viewModel.deletePendingIntent.collectAsStateWithLifecycle()
+    var videoToDelete by remember { mutableStateOf<VideoItem?>(null) }
+
+    val renamePendingIntent by viewModel.renamePendingIntent.collectAsStateWithLifecycle()
+    var videoToRename by remember { mutableStateOf<VideoItem?>(null) }
+
+    val deleteLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.onPendingDeleteSuccess()
+            Toast.makeText(context, "Video deleted successfully", Toast.LENGTH_SHORT).show()
+        } else {
+            viewModel.onPendingDeleteCanceled()
+        }
+    }
+
+    LaunchedEffect(deletePendingIntent) {
+        deletePendingIntent?.let { sender ->
+            try {
+                deleteLauncher.launch(IntentSenderRequest.Builder(sender).build())
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModel.onPendingDeleteCanceled()
+            }
+        }
+    }
+
+    val renameLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.onPendingRenameSuccess()
+            Toast.makeText(context, "Video renamed successfully", Toast.LENGTH_SHORT).show()
+        } else {
+            viewModel.onPendingRenameCanceled()
+        }
+    }
+
+    LaunchedEffect(renamePendingIntent) {
+        renamePendingIntent?.let { sender ->
+            try {
+                renameLauncher.launch(IntentSenderRequest.Builder(sender).build())
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModel.onPendingRenameCanceled()
+            }
+        }
+    }
 
     var isSearchActive by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
@@ -169,34 +225,21 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // High Density Brand: Sultan + PRO badge
+                        // Brand: Video Player
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Sultan",
+                                text = "Video Player",
                                 color = MaterialTheme.colorScheme.primary,
-                                fontSize = 22.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.5).sp
+                                letterSpacing = (-0.3).sp
                             )
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.padding(top = 1.dp)
-                            ) {
-                                Text(
-                                    text = "PRO MAX",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                )
-                            }
                         }
 
-                        // Action Icons: Search, Sort, Refresh
+                        // Action Icons: Search, Sort, Refresh, Settings in top corner
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -218,6 +261,22 @@ fun DashboardScreen(
                                 modifier = Modifier.size(38.dp)
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = HighDensityTextPrimary, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (uiState.selectedFolder != null) {
+                                        viewModel.selectFolder(null)
+                                    }
+                                    viewModel.setTab(MainTab.SETTINGS)
+                                },
+                                modifier = Modifier.size(38.dp).testTag("settings_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = if (uiState.currentTab == MainTab.SETTINGS) MaterialTheme.colorScheme.primary else HighDensityTextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
@@ -275,83 +334,6 @@ fun DashboardScreen(
                         .fillMaxWidth()
                         .height(1.dp)
                         .background(HighDensityBorder.copy(alpha = 0.4f))
-                )
-            }
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = HighDensitySurface,
-                contentColor = HighDensityTextPrimary,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                NavigationBarItem(
-                    selected = uiState.currentTab == MainTab.FOLDERS,
-                    onClick = { viewModel.setTab(MainTab.FOLDERS) },
-                    icon = { Icon(Icons.Default.Folder, contentDescription = "Folders", modifier = Modifier.size(20.dp)) },
-                    label = { Text("FOLDERS", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = HighDensityBorder,
-                        unselectedIconColor = HighDensityTextSecondary,
-                        unselectedTextColor = HighDensityTextSecondary
-                    )
-                )
-
-                NavigationBarItem(
-                    selected = uiState.currentTab == MainTab.ALL_VIDEOS,
-                    onClick = { viewModel.setTab(MainTab.ALL_VIDEOS) },
-                    icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Videos", modifier = Modifier.size(20.dp)) },
-                    label = { Text("VIDEOS", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = HighDensityBorder,
-                        unselectedIconColor = HighDensityTextSecondary,
-                        unselectedTextColor = HighDensityTextSecondary
-                    )
-                )
-
-                NavigationBarItem(
-                    selected = uiState.currentTab == MainTab.NETWORK_STREAM,
-                    onClick = { viewModel.setTab(MainTab.NETWORK_STREAM) },
-                    icon = { Icon(Icons.Default.Language, contentDescription = "Stream", modifier = Modifier.size(20.dp)) },
-                    label = { Text("STREAM", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = HighDensityBorder,
-                        unselectedIconColor = HighDensityTextSecondary,
-                        unselectedTextColor = HighDensityTextSecondary
-                    )
-                )
-
-                NavigationBarItem(
-                    selected = uiState.currentTab == MainTab.VAULT,
-                    onClick = { viewModel.setTab(MainTab.VAULT) },
-                    icon = { Icon(Icons.Default.Security, contentDescription = "Vault", modifier = Modifier.size(20.dp)) },
-                    label = { Text("VAULT", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = HighDensityBorder,
-                        unselectedIconColor = HighDensityTextSecondary,
-                        unselectedTextColor = HighDensityTextSecondary
-                    )
-                )
-
-                NavigationBarItem(
-                    selected = uiState.currentTab == MainTab.SETTINGS,
-                    onClick = { viewModel.setTab(MainTab.SETTINGS) },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp)) },
-                    label = { Text("SETTINGS", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = HighDensityBorder,
-                        unselectedIconColor = HighDensityTextSecondary,
-                        unselectedTextColor = HighDensityTextSecondary
-                    )
                 )
             }
         }
@@ -500,7 +482,8 @@ fun DashboardScreen(
                             onVideoClicked = { video, list -> onPlayVideo(video, list) },
                             onToggleFavorite = { video, fav -> viewModel.toggleFavorite(video, fav) },
                             onShowDetails = { video -> viewModel.showVideoDetails(video) },
-                            onDeleteVideo = { video -> viewModel.deleteVideo(video) }
+                            onRenameVideo = { video -> videoToRename = video },
+                            onDeleteVideo = { video -> videoToDelete = video }
                         )
                     }
                     uiState.currentTab == MainTab.FOLDERS -> {
@@ -520,7 +503,8 @@ fun DashboardScreen(
                             onVideoClicked = { video, list -> onPlayVideo(video, list) },
                             onToggleFavorite = { video, fav -> viewModel.toggleFavorite(video, fav) },
                             onShowDetails = { video -> viewModel.showVideoDetails(video) },
-                            onDeleteVideo = { video -> viewModel.deleteVideo(video) },
+                            onRenameVideo = { video -> videoToRename = video },
+                            onDeleteVideo = { video -> videoToDelete = video },
                             onRefresh = { viewModel.loadMedia() }
                         )
                     }
@@ -564,7 +548,7 @@ fun DashboardScreen(
                             onToggleFavorite = { video, fav -> viewModel.toggleFavorite(video, fav) },
                             onShowDetails = { video -> viewModel.showVideoDetails(video) },
                             onShare = {},
-                            onDeleteVideo = { video -> viewModel.deleteVideo(video) }
+                            onDeleteVideo = { video -> videoToDelete = video }
                         )
                     }
                     uiState.currentTab == MainTab.SETTINGS -> {
@@ -572,7 +556,8 @@ fun DashboardScreen(
                             selectedPalette = uiState.selectedPalette,
                             onSelectPalette = { viewModel.setThemePalette(it) },
                             onOpenVault = { viewModel.setTab(MainTab.VAULT) },
-                            onOpenStream = { viewModel.setTab(MainTab.NETWORK_STREAM) }
+                            onOpenStream = { viewModel.setTab(MainTab.NETWORK_STREAM) },
+                            onBack = { viewModel.setTab(MainTab.FOLDERS) }
                         )
                     }
                 }
@@ -646,6 +631,66 @@ fun DashboardScreen(
                 TextButton(onClick = { showSortDialog = false }) {
                     Text("Close", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
+            }
+        )
+    }
+
+    // Delete Confirmation Dialog
+    if (videoToDelete != null) {
+        val target = videoToDelete!!
+        AlertDialog(
+            onDismissRequest = { videoToDelete = null },
+            containerColor = HighDensitySurface,
+            title = {
+                Text(
+                    text = "Delete Video",
+                    color = HighDensityTextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to permanently delete \"${target.title}\"?",
+                    color = HighDensityTextSecondary,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val v = videoToDelete
+                        videoToDelete = null
+                        if (v != null) {
+                            viewModel.deleteVideo(v)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFBA1A1A),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Delete", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { videoToDelete = null }) {
+                    Text("Cancel", color = HighDensityTextSecondary)
+                }
+            }
+        )
+    }
+
+    // Rename Video Dialog
+    if (videoToRename != null) {
+        val target = videoToRename!!
+        RenameVideoDialog(
+            video = target,
+            onDismiss = { videoToRename = null },
+            onRenameConfirm = { newName ->
+                videoToRename = null
+                viewModel.renameVideo(target, newName)
             }
         )
     }

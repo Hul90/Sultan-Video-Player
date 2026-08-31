@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
                 }
                 .diskCache {
                     DiskCache.Builder()
-                        .directory(cacheDir.resolve("sultan_thumbnails"))
+                        .directory(cacheDir.resolve("videoplayer_thumbnails"))
                         .maxSizeBytes(150L * 1024 * 1024)
                         .build()
                 }

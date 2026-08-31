@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.Build
 import android.view.SurfaceView
@@ -92,6 +93,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -141,6 +143,9 @@ fun PlayerScreen(
     val uiState by playerManager.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showTrackDialog by remember { mutableStateOf(false) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
@@ -161,7 +166,7 @@ fun PlayerScreen(
         if (sleepTimerMinutes > 0) {
             delay(sleepTimerMinutes * 60 * 1000L)
             playerManager.player.pause()
-            Toast.makeText(context, "Sultan Player: Sleep timer finished playback", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Video Player: Sleep timer finished playback", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -433,10 +438,10 @@ fun PlayerScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 6.dp)
+                                .padding(horizontal = 8.dp)
                         ) {
                             Text(
-                                text = uiState.currentVideo?.title ?: "Sultan Video Player",
+                                text = uiState.currentVideo?.title ?: "Video Player",
                                 color = Color.White,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
@@ -447,45 +452,49 @@ fun PlayerScreen(
                                 Text(
                                     text = "${uiState.currentVideo!!.resolutionBadge} • ${uiState.currentVideo!!.sizeFormatted}",
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontSize = 11.sp
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        // Equalizer Button
-                        IconButton(onClick = { showEqualizerDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.GraphicEq,
-                                contentDescription = "Equalizer & Booster",
-                                tint = if (uiState.equalizerState.isEnabled) MaterialTheme.colorScheme.primary else Color.White
-                            )
-                        }
+                        if (isLandscape) {
+                            // Equalizer Button (Landscape only quick access)
+                            IconButton(onClick = { showEqualizerDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = "Equalizer & Booster",
+                                    tint = if (uiState.equalizerState.isEnabled) MaterialTheme.colorScheme.primary else Color.White
+                                )
+                            }
 
-                        // Subtitle Downloader & Sync
-                        IconButton(onClick = { showSubtitleDownloaderDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Subtitles,
-                                contentDescription = "Subtitle Downloader",
-                                tint = if (uiState.selectedSubtitleTrackIndex >= 0) MaterialTheme.colorScheme.primary else Color.White
-                            )
-                        }
+                            // Subtitle Downloader & Sync (Landscape only quick access)
+                            IconButton(onClick = { showSubtitleDownloaderDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Subtitles,
+                                    contentDescription = "Subtitle Downloader",
+                                    tint = if (uiState.selectedSubtitleTrackIndex >= 0) MaterialTheme.colorScheme.primary else Color.White
+                                )
+                            }
 
-                        // Video Cutter & GIF Tool
-                        IconButton(onClick = { showVideoCutterDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCut,
-                                contentDescription = "Video Cutter",
-                                tint = Color.White
-                            )
-                        }
+                            // Video Cutter & GIF Tool (Landscape only quick access)
+                            IconButton(onClick = { showVideoCutterDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCut,
+                                    contentDescription = "Video Cutter",
+                                    tint = Color.White
+                                )
+                            }
 
-                        // Aspect Ratio Switcher
-                        IconButton(onClick = { showAspectRatioDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.ZoomOutMap,
-                                contentDescription = "Aspect Ratio",
-                                tint = Color.White
-                            )
+                            // Aspect Ratio Switcher (Landscape only quick access)
+                            IconButton(onClick = { showAspectRatioDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.ZoomOutMap,
+                                    contentDescription = "Aspect Ratio",
+                                    tint = Color.White
+                                )
+                            }
                         }
 
                         // Screen Lock button
@@ -497,7 +506,7 @@ fun PlayerScreen(
                             )
                         }
 
-                        // More Menu (Speed, Details, Sleep Timer, Background Play, A-B Repeat)
+                        // More Menu (Speed, Details, Sleep Timer, Background Play, A-B Repeat, Equalizer, Subs, Cutter)
                         Box {
                             IconButton(onClick = { showMoreMenu = true }) {
                                 Icon(
@@ -512,6 +521,40 @@ fun PlayerScreen(
                                 onDismissRequest = { showMoreMenu = false },
                                 modifier = Modifier.background(DarkNavyCard)
                             ) {
+                                if (!isLandscape) {
+                                    DropdownMenuItem(
+                                        text = { Text("Equalizer & Sound Booster", color = TextPrimary) },
+                                        leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showEqualizerDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Subtitles & Download", color = TextPrimary) },
+                                        leadingIcon = { Icon(Icons.Default.Subtitles, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showSubtitleDownloaderDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Video Cutter & GIF Tool", color = TextPrimary) },
+                                        leadingIcon = { Icon(Icons.Default.ContentCut, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showVideoCutterDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Aspect Ratio & Fit", color = TextPrimary) },
+                                        leadingIcon = { Icon(Icons.Default.ZoomOutMap, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showAspectRatioDialog = true
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Background Audio Play", color = TextPrimary) },
                                     leadingIcon = { Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
@@ -656,7 +699,7 @@ fun PlayerScreen(
                             )
                         )
                         .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
 
@@ -783,7 +826,7 @@ fun PlayerScreen(
                                                     uiState.currentVideo?.title ?: "Video"
                                                 )
                                                 if (uri != null) {
-                                                    Toast.makeText(context, "Screenshot saved to Pictures/SultanPlayer", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, "Screenshot saved to Pictures/VideoPlayer", Toast.LENGTH_SHORT).show()
                                                 }
                                             } else {
                                                 Toast.makeText(context, "Screenshot saved to Gallery!", Toast.LENGTH_SHORT).show()

@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
@@ -12,6 +13,21 @@ import com.example.data.model.VideoSortBy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+
+import android.app.RecoverableSecurityException
+import android.content.IntentSender
+
+sealed class DeleteResult {
+    object Success : DeleteResult()
+    data class RequiresIntentSender(val intentSender: IntentSender, val video: VideoItem) : DeleteResult()
+    data class Error(val message: String) : DeleteResult()
+}
+
+sealed class RenameResult {
+    object Success : RenameResult()
+    data class RequiresIntentSender(val intentSender: IntentSender, val video: VideoItem, val newName: String) : RenameResult()
+    data class Error(val message: String) : RenameResult()
+}
 
 class VideoRepository(private val context: Context) {
 
@@ -165,22 +181,110 @@ class VideoRepository(private val context: Context) {
         return folderList.sortedBy { it.name.lowercase() }
     }
 
-    suspend fun deleteVideo(video: VideoItem): Boolean = withContext(Dispatchers.IO) {
+    suspend fun deleteVideo(video: VideoItem): DeleteResult = withContext(Dispatchers.IO) {
         try {
-            if (video.isDemo) return@withContext true
-            val rows = context.contentResolver.delete(video.uri, null, null)
-            if (rows > 0) return@withContext true
+            if (video.isDemo) return@withContext DeleteResult.Success
+
+            if (video.path.isNotEmpty()) {
+                val file = File(video.path)
+                if (file.exists() && file.delete()) {
+                    try {
+                        context.contentResolver.delete(video.uri, null, null)
+                    } catch (_: Exception) {}
+                    return@withContext DeleteResult.Success
+                }
+            }
+
+            try {
+                val rows = context.contentResolver.delete(video.uri, null, null)
+                if (rows > 0) return@withContext DeleteResult.Success
+            } catch (securityEx: SecurityException) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val pendingIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(video.uri))
+                    return@withContext DeleteResult.RequiresIntentSender(pendingIntent.intentSender, video)
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && securityEx is RecoverableSecurityException) {
+                    return@withContext DeleteResult.RequiresIntentSender(securityEx.userAction.actionIntent.intentSender, video)
+                }
+                throw securityEx
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val pendingIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(video.uri))
+                return@withContext DeleteResult.RequiresIntentSender(pendingIntent.intentSender, video)
+            }
+
+            return@withContext DeleteResult.Success
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext DeleteResult.Error(e.localizedMessage ?: "Delete failed")
+        }
+    }
+
+    suspend fun renameVideo(video: VideoItem, newName: String): RenameResult = withContext(Dispatchers.IO) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return@withContext RenameResult.Error("Name cannot be empty")
+
+        val extension = when {
+            video.title.contains(".") -> "." + video.title.substringAfterLast(".")
+            video.path.contains(".") -> "." + video.path.substringAfterLast(".")
+            else -> ".mp4"
+        }
+
+        val finalFullName = when {
+            trimmed.endsWith(extension, ignoreCase = true) -> trimmed
+            trimmed.contains(".") -> trimmed
+            else -> "$trimmed$extension"
+        }
+
+        try {
+            if (video.isDemo) return@withContext RenameResult.Success
+
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, finalFullName)
+                put(MediaStore.Video.Media.TITLE, finalFullName.substringBeforeLast("."))
+            }
+
+            try {
+                val rows = context.contentResolver.update(video.uri, values, null, null)
+                if (rows > 0) {
+                    if (video.path.isNotEmpty()) {
+                        val file = File(video.path)
+                        if (file.exists()) {
+                            val newFile = File(file.parentFile, finalFullName)
+                            file.renameTo(newFile)
+                        }
+                    }
+                    return@withContext RenameResult.Success
+                }
+            } catch (securityEx: SecurityException) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val pendingIntent = MediaStore.createWriteRequest(context.contentResolver, listOf(video.uri))
+                    return@withContext RenameResult.RequiresIntentSender(pendingIntent.intentSender, video, finalFullName)
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && securityEx is RecoverableSecurityException) {
+                    return@withContext RenameResult.RequiresIntentSender(securityEx.userAction.actionIntent.intentSender, video, finalFullName)
+                }
+                throw securityEx
+            }
 
             if (video.path.isNotEmpty()) {
                 val file = File(video.path)
                 if (file.exists()) {
-                    return@withContext file.delete()
+                    val newFile = File(file.parentFile, finalFullName)
+                    if (file.renameTo(newFile)) {
+                        return@withContext RenameResult.Success
+                    }
                 }
             }
-            false
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val pendingIntent = MediaStore.createWriteRequest(context.contentResolver, listOf(video.uri))
+                return@withContext RenameResult.RequiresIntentSender(pendingIntent.intentSender, video, finalFullName)
+            }
+
+            return@withContext RenameResult.Success
         } catch (e: Exception) {
             e.printStackTrace()
-            false
+            return@withContext RenameResult.Error(e.localizedMessage ?: "Rename failed")
         }
     }
 }

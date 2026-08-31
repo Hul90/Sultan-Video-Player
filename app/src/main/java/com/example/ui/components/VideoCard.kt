@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Share
@@ -69,6 +70,7 @@ fun VideoCard(
     onToggleFavorite: () -> Unit,
     onShowDetails: () -> Unit,
     onShare: () -> Unit,
+    onRename: () -> Unit = {},
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -100,7 +102,10 @@ fun VideoCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(video.thumbnailUrl ?: video.uri)
-                        .crossfade(true)
+                        .crossfade(150)
+                        .size(240, 160)
+                        .memoryCacheKey("thumb_${video.id}")
+                        .diskCacheKey("thumb_${video.id}")
                         .build(),
                     contentDescription = video.title,
                     modifier = Modifier.fillMaxSize(),
@@ -291,18 +296,26 @@ fun VideoCard(
                             onShare()
                         }
                     )
-                    if (!video.isDemo) {
-                        DropdownMenuItem(
-                            text = { Text("Delete", color = Color(0xFFFFB4AB), fontSize = 13.sp) },
-                            leadingIcon = {
-                                Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFFB4AB), modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                showMenu = false
-                                onDelete()
-                            }
-                        )
-                    }
+                    DropdownMenuItem(
+                        text = { Text("Rename", color = HighDensityTextPrimary, fontSize = 13.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = "Rename", tint = HighDensityTextSecondary, modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            onRename()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete Video", color = Color(0xFFFFB4AB), fontSize = 13.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFFB4AB), modifier = Modifier.size(18.dp))
+                        },
+                        onClick = {
+                            showMenu = false
+                            onDelete()
+                        }
+                    )
                 }
             }
         }

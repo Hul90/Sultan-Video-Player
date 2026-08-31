@@ -43,6 +43,7 @@ fun FolderVideosScreen(
     onVideoClicked: (VideoItem, List<VideoItem>) -> Unit,
     onToggleFavorite: (VideoItem, Boolean) -> Unit,
     onShowDetails: (VideoItem) -> Unit,
+    onRenameVideo: (VideoItem) -> Unit = {},
     onDeleteVideo: (VideoItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -108,6 +109,7 @@ fun FolderVideosScreen(
                         }
                         context.startActivity(Intent.createChooser(shareIntent, "Share Video"))
                     },
+                    onRename = { onRenameVideo(video) },
                     onDelete = { onDeleteVideo(video) }
                 )
             }

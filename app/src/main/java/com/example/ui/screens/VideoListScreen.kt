@@ -47,6 +47,7 @@ fun VideoListScreen(
     onVideoClicked: (VideoItem, List<VideoItem>) -> Unit,
     onToggleFavorite: (VideoItem, Boolean) -> Unit,
     onShowDetails: (VideoItem) -> Unit,
+    onRenameVideo: (VideoItem) -> Unit = {},
     onDeleteVideo: (VideoItem) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
@@ -123,10 +124,11 @@ fun VideoListScreen(
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = video.mimeType
                                 putExtra(Intent.EXTRA_STREAM, video.uri)
-                                putExtra(Intent.EXTRA_TEXT, "Watch '${video.title}' with Sultan Video Player")
+                                putExtra(Intent.EXTRA_TEXT, "Watch '${video.title}' with Video Player")
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Video"))
                         },
+                        onRename = { onRenameVideo(video) },
                         onDelete = { onDeleteVideo(video) }
                     )
                 }

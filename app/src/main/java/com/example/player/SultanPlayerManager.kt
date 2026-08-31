@@ -6,10 +6,12 @@ import android.media.AudioManager
 import android.net.Uri
 import android.view.WindowManager
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -20,7 +22,12 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp4.Mp4Extractor
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import androidx.media3.extractor.mkv.MatroskaExtractor
 import com.example.data.model.AspectRatioMode
 import com.example.data.model.VideoItem
 import com.example.data.repository.PlaybackHistoryRepository
@@ -63,11 +70,29 @@ class SultanPlayerManager(
 
     private val renderersFactory = DefaultRenderersFactory(context.applicationContext).apply {
         setEnableDecoderFallback(true)
+        setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
     }
+
+    private val extractorsFactory = DefaultExtractorsFactory().apply {
+        setConstantBitrateSeekingEnabled(true)
+        setMp4ExtractorFlags(Mp4Extractor.FLAG_WORKAROUND_IGNORE_EDIT_LISTS)
+        setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
+        setMatroskaExtractorFlags(MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES)
+    }
+
+    private val mediaSourceFactory = DefaultMediaSourceFactory(context.applicationContext, extractorsFactory)
+
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+        .build()
 
     val player: ExoPlayer = try {
         ExoPlayer.Builder(context.applicationContext, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(10000)
             .setSeekForwardIncrementMs(10000)
             .build()
@@ -177,6 +202,11 @@ class SultanPlayerManager(
                     )
                 }
             }
+
+            override fun onPlayerError(error: PlaybackException) {
+                error.printStackTrace()
+                _uiState.update { it.copy(isBuffering = false) }
+            }
         })
     }
 
@@ -203,6 +233,54 @@ class SultanPlayerManager(
             val mediaItemBuilder = MediaItem.Builder()
                 .setUri(video.uri)
                 .setMediaId(video.uri.toString())
+
+            val uriStr = video.uri.toString().lowercase()
+            val fileExt = video.title.substringAfterLast('.', "").lowercase()
+
+            when {
+                uriStr.contains(".m3u8") || uriStr.contains("format=m3u8") -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+                }
+                uriStr.contains(".mpd") -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+                }
+                uriStr.contains(".ism") || uriStr.contains("/manifest") -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_SS)
+                }
+                uriStr.startsWith("rtsp://") -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_RTSP)
+                }
+                fileExt == "mp4" || fileExt == "m4v" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_MP4)
+                }
+                fileExt == "mkv" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_MATROSKA)
+                }
+                fileExt == "webm" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_WEBM)
+                }
+                fileExt == "avi" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_AVI)
+                }
+                fileExt == "mov" || fileExt == "qt" -> {
+                    mediaItemBuilder.setMimeType("video/quicktime")
+                }
+                fileExt == "flv" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_FLV)
+                }
+                fileExt == "ts" || fileExt == "m2ts" || fileExt == "mts" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_MP2T)
+                }
+                fileExt == "3gp" || fileExt == "3gpp" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_H263)
+                }
+                fileExt == "ogv" || fileExt == "ogg" -> {
+                    mediaItemBuilder.setMimeType(MimeTypes.VIDEO_OGG)
+                }
+                video.mimeType.isNotEmpty() && video.mimeType != "video/*" -> {
+                    mediaItemBuilder.setMimeType(video.mimeType)
+                }
+            }
 
             // Attach subtitle if available
             if (!video.subtitleUrl.isNullOrBlank()) {
